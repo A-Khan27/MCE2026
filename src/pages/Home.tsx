@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { Users, MessageSquare, Calendar, BarChart3, ChevronRight, Sparkles, Target, Trophy } from 'lucide-react';
 import { Candidate } from '../types';
 import { candidates as defaultCandidates } from '../data/candidates';
+import { supabase } from '../lib/supabase';
 
 export default function Home() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
   
   // Countdown State
   const [timeLeft, setTimeLeft] = useState({
@@ -15,19 +17,33 @@ export default function Home() {
     seconds: 0,
   });
 
-  // Load Candidates
+  // Load Candidates from Supabase
   useEffect(() => {
-    const stored = localStorage.getItem('mathclub-candidates');
-    if (stored) {
-      setCandidates(JSON.parse(stored));
-    } else {
-      setCandidates(defaultCandidates);
+    async function loadCandidates() {
+      try {
+        const { data, error } = await supabase
+          .from('candidates')
+          .select('*')
+          .order('id', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          setCandidates(data);
+        } else {
+          // Fallback to default candidates
+          setCandidates(defaultCandidates);
+        }
+      } catch (err) {
+        console.error('Error loading candidates:', err);
+        setCandidates(defaultCandidates);
+      } finally {
+        setLoading(false);
+      }
     }
+    loadCandidates();
   }, []);
 
   // Countdown Logic
   useEffect(() => {
-    // Set the date we're counting down to: April 8, 2026 at 10:00:00 AM
     const targetDate = new Date("April 8, 2026 10:00:00").getTime();
 
     const interval = setInterval(() => {
@@ -210,39 +226,51 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {candidates.map((candidate) => (
-              <Link
-                key={candidate.id}
-                to={`/candidates/${candidate.id}`}
-                className="group relative p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-all duration-500 hover:scale-105 hover:shadow-2xl overflow-hidden"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${candidate.color} opacity-0 group-hover:opacity-5 transition-opacity duration-500`} />
-                <div className="relative">
-                  {/* Profile Picture or Emoji */}
-                  <div className="mb-4 relative inline-block">
-                    {candidate.profilePicture ? (
-                      <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-white/20 shadow-lg group-hover:scale-110 transition-transform duration-500">
-                        <img src={candidate.profilePicture} alt={candidate.name} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="text-5xl">{candidate.avatar}</div>
-                    )}
-                    {candidate.symbol && (
-                      <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-lg overflow-hidden border-2 border-slate-950 shadow-md bg-white/10">
-                        <img src={candidate.symbol} alt="Symbol" className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                  </div>
-                  <h3 className="text-white font-bold text-lg mb-1">{candidate.name}</h3>
-                  <p className="text-indigo-400 text-sm font-medium mb-2">{candidate.year} • {candidate.department}</p>
-                  <p className="text-slate-400 text-sm italic">{candidate.tagline}</p>
-                  <div className="mt-4 flex items-center text-indigo-400 text-sm font-medium group-hover:text-indigo-300 transition-colors">
-                    View Profile
-                    <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                  </div>
+            {loading ? (
+              // Loading State
+              [1, 2, 3, 4].map((i) => (
+                <div key={i} className="p-6 rounded-2xl bg-white/5 border border-white/10 animate-pulse">
+                  <div className="w-20 h-20 rounded-2xl bg-white/10 mb-4" />
+                  <div className="h-4 bg-white/10 rounded mb-2" />
+                  <div className="h-3 bg-white/10 rounded w-3/4" />
                 </div>
-              </Link>
-            ))}
+              ))
+            ) : (
+              // Candidates from Supabase
+              candidates.map((candidate) => (
+                <Link
+                  key={candidate.id}
+                  to={`/candidates/${candidate.id}`}
+                  className="group relative p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-all duration-500 hover:scale-105 hover:shadow-2xl overflow-hidden"
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-br ${candidate.color} opacity-0 group-hover:opacity-5 transition-opacity duration-500`} />
+                  <div className="relative">
+                    {/* Profile Picture or Emoji */}
+                    <div className="mb-4 relative inline-block">
+                      {candidate.profile_picture ? (
+                        <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-white/20 shadow-lg group-hover:scale-110 transition-transform duration-500">
+                          <img src={candidate.profile_picture} alt={candidate.name} className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="text-5xl">{candidate.avatar || '🎓'}</div>
+                      )}
+                      {candidate.symbol && (
+                        <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-lg overflow-hidden border-2 border-slate-950 shadow-md bg-white/10">
+                          <img src={candidate.symbol} alt="Symbol" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                    <h3 className="text-white font-bold text-lg mb-1">{candidate.name}</h3>
+                    <p className="text-indigo-400 text-sm font-medium mb-2">{candidate.year} • {candidate.department}</p>
+                    <p className="text-slate-400 text-sm italic">{candidate.tagline}</p>
+                    <div className="mt-4 flex items-center text-indigo-400 text-sm font-medium group-hover:text-indigo-300 transition-colors">
+                      View Profile
+                      <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -252,7 +280,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             {[
-              { icon: <Target className="w-6 h-6" />, value: '4', label: 'Candidates' },
+              { icon: <Target className="w-6 h-6" />, value: candidates.length.toString() || '4', label: 'Candidates' },
               { icon: <Users className="w-6 h-6" />, value: '200+', label: 'Eligible Voters' },
               { icon: <Calendar className="w-6 h-6" />, value: '7', label: 'Election Events' },
               { icon: <MessageSquare className="w-6 h-6" />, value: '∞', label: 'Ideas Welcome' },

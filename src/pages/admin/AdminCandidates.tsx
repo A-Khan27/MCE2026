@@ -1,3 +1,4 @@
+import { supabase } from '../../lib/supabase';
 import { useState, useEffect, useRef } from 'react';
 import {
   Users,
@@ -29,7 +30,7 @@ const colorOptions = [
   { label: 'Lime → Emerald', value: 'from-lime-500 to-emerald-600' },
 ];
 
-const emojiOptions = ['🧮', '📐', '∑', '📊', '🎓', '📚', '🔬', '💡', '🏆', '⚡', 'π', '∞', '√', 'Δ', '∫', 'θ'];
+const emojiOptions = ['🧮', '📐', '∑', '📊', '🎓', '📚', '🔬', '', '🏆', '⚡', 'π', '∞', '√', 'Δ', '∫', 'θ'];
 
 const emptyCandidate: Candidate = {
   id: '',
@@ -186,22 +187,54 @@ export default function AdminCandidates() {
   const [isCreating, setIsCreating] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('mathclub-candidates');
-    if (stored) {
-      setCandidates(JSON.parse(stored));
-    } else {
-      setCandidates(defaultCandidates);
-      localStorage.setItem('mathclub-candidates', JSON.stringify(defaultCandidates));
-    }
+    loadCandidates();
   }, []);
 
-  const saveCandidates = (updated: Candidate[]) => {
-    setCandidates(updated);
-    localStorage.setItem('mathclub-candidates', JSON.stringify(updated));
-  };
+  async function loadCandidates() {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('candidates')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const formatted = data.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          position: c.position,
+          department: c.department,
+          year: c.year,
+          tagline: c.tagline,
+          bio: c.bio || '',
+          avatar: c.avatar || '🧮',
+          color: c.color || 'from-blue-500 to-indigo-600',
+          profilePicture: c.profile_picture || '',
+          symbol: c.symbol || '',
+          promises: c.promises || [''],
+          vision: c.vision || '',
+          achievements: c.achievements || [''],
+          socials: c.socials || { email: '' },
+        }));
+        setCandidates(formatted);
+      } else {
+        setCandidates(defaultCandidates);
+      }
+    } catch (err) {
+      console.error('Error loading candidates:', err);
+      setCandidates(defaultCandidates);
+      showToast('Failed to load candidates. Using defaults.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -222,42 +255,81 @@ export default function AdminCandidates() {
     setIsCreating(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editingCandidate) return;
     if (!editingCandidate.name.trim() || !editingCandidate.tagline.trim()) {
       showToast('Name and tagline are required!', 'error');
       return;
     }
 
-    const candidate = {
-      ...editingCandidate,
-      id:
-        editingCandidate.id ||
-        editingCandidate.name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now(),
-      promises: editingCandidate.promises.filter((p) => p.trim()),
-      achievements: editingCandidate.achievements.filter((a) => a.trim()),
-    };
+    setSaving(true);
 
-    let updated: Candidate[];
-    if (isCreating) {
-      updated = [...candidates, candidate];
-      showToast(`${candidate.name} added successfully!`);
-    } else {
-      updated = candidates.map((c) => (c.id === candidate.id ? candidate : c));
-      showToast(`${candidate.name} updated successfully!`);
+    try {
+      const candidate = {
+        id:
+          editingCandidate.id ||
+          editingCandidate.name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now(),
+        name: editingCandidate.name,
+        position: editingCandidate.position,
+        department: editingCandidate.department,
+        year: editingCandidate.year,
+        tagline: editingCandidate.tagline,
+        bio: editingCandidate.bio,
+        avatar: editingCandidate.avatar,
+        color: editingCandidate.color,
+        profile_picture: editingCandidate.profilePicture,
+        symbol: editingCandidate.symbol,
+        promises: editingCandidate.promises.filter((p) => p.trim()),
+        achievements: editingCandidate.achievements.filter((a) => a.trim()),
+        vision: editingCandidate.vision,
+        socials: editingCandidate.socials,
+      };
+
+      let error;
+      
+      if (isCreating) {
+        const result = await supabase.from('candidates').insert([candidate]);
+        error = result.error;
+      } else {
+        const result = await supabase
+          .from('candidates')
+          .update(candidate)
+          .eq('id', editingCandidate.id);
+        error = result.error;
+      }
+
+      if (error) throw error;
+
+      showToast(isCreating ? `${candidate.name} added successfully!` : `${candidate.name} updated successfully!`, 'success');
+      setEditingCandidate(null);
+      setIsCreating(false);
+      loadCandidates();
+    } catch (err: any) {
+      console.error('Save error:', err);
+      showToast('Save failed: ' + err.message, 'error');
+    } finally {
+      setSaving(false);
     }
-
-    saveCandidates(updated);
-    setEditingCandidate(null);
-    setIsCreating(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const candidate = candidates.find((c) => c.id === id);
-    const updated = candidates.filter((c) => c.id !== id);
-    saveCandidates(updated);
-    setDeleteConfirm(null);
-    showToast(`${candidate?.name || 'Candidate'} removed.`, 'error');
+    
+    try {
+      const { error } = await supabase
+        .from('candidates')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setDeleteConfirm(null);
+      showToast(`${candidate?.name || 'Candidate'} removed.`, 'error');
+      loadCandidates();
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      showToast('Delete failed: ' + err.message, 'error');
+    }
   };
 
   const updateField = (field: keyof Candidate, value: string) => {
@@ -285,7 +357,6 @@ export default function AdminCandidates() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* Toast */}
       {toast && (
         <div
           className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium shadow-xl ${
@@ -303,7 +374,6 @@ export default function AdminCandidates() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1
@@ -313,7 +383,9 @@ export default function AdminCandidates() {
             <Users className="w-6 h-6 text-blue-400" />
             Manage Candidates
           </h1>
-          <p className="text-slate-400 text-sm mt-1">{candidates.length} registered candidates</p>
+          <p className="text-slate-400 text-sm mt-1">
+            {loading ? 'Loading...' : `${candidates.length} registered candidates`}
+          </p>
         </div>
 
         <button
@@ -325,7 +397,13 @@ export default function AdminCandidates() {
         </button>
       </div>
 
-      {/* Edit/Create Modal */}
+      {loading && (
+        <div className="text-center py-16 rounded-2xl bg-white/5 border border-white/10">
+          <Users className="w-16 h-16 text-slate-700 mx-auto mb-4 animate-pulse" />
+          <p className="text-slate-400 text-lg font-medium">Loading candidates...</p>
+        </div>
+      )}
+
       {editingCandidate && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center p-4 overflow-y-auto">
           <div className="w-full max-w-3xl my-8 rounded-2xl bg-slate-900 border border-white/10 shadow-2xl">
@@ -348,7 +426,6 @@ export default function AdminCandidates() {
             </div>
 
             <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-              {/* ===== PROFILE PICTURE & ELECTION SYMBOL ===== */}
               <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-500/5 to-purple-500/5 border border-indigo-500/10">
                 <h3 className="text-white font-semibold mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
                   <Camera className="w-4 h-4 text-indigo-400" />
@@ -382,12 +459,9 @@ export default function AdminCandidates() {
                 </div>
               </div>
 
-              {/* Basic Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-1.5">
-                    Full Name *
-                  </label>
+                  <label className="block text-slate-300 text-sm font-medium mb-1.5">Full Name *</label>
                   <input
                     type="text"
                     value={editingCandidate.name}
@@ -397,9 +471,7 @@ export default function AdminCandidates() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-1.5">
-                    Position
-                  </label>
+                  <label className="block text-slate-300 text-sm font-medium mb-1.5">Position</label>
                   <input
                     type="text"
                     value={editingCandidate.position}
@@ -409,9 +481,7 @@ export default function AdminCandidates() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-1.5">
-                    Department
-                  </label>
+                  <label className="block text-slate-300 text-sm font-medium mb-1.5">Department</label>
                   <input
                     type="text"
                     value={editingCandidate.department}
@@ -452,9 +522,7 @@ export default function AdminCandidates() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-1.5">
-                    Tagline *
-                  </label>
+                  <label className="block text-slate-300 text-sm font-medium mb-1.5">Tagline *</label>
                   <input
                     type="text"
                     value={editingCandidate.tagline}
@@ -465,12 +533,9 @@ export default function AdminCandidates() {
                 </div>
               </div>
 
-              {/* Avatar Emoji & Color (kept as fallback) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-1.5">
-                    Fallback Emoji (used if no photo)
-                  </label>
+                  <label className="block text-slate-300 text-sm font-medium mb-1.5">Fallback Emoji</label>
                   <div className="flex flex-wrap gap-2">
                     {emojiOptions.map((emoji) => (
                       <button
@@ -489,9 +554,7 @@ export default function AdminCandidates() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-1.5">
-                    Theme Color
-                  </label>
+                  <label className="block text-slate-300 text-sm font-medium mb-1.5">Theme Color</label>
                   <div className="grid grid-cols-2 gap-2">
                     {colorOptions.map((opt) => (
                       <button
@@ -512,7 +575,6 @@ export default function AdminCandidates() {
                 </div>
               </div>
 
-              {/* Bio */}
               <div>
                 <label className="block text-slate-300 text-sm font-medium mb-1.5">Biography</label>
                 <textarea
@@ -524,11 +586,8 @@ export default function AdminCandidates() {
                 />
               </div>
 
-              {/* Vision */}
               <div>
-                <label className="block text-slate-300 text-sm font-medium mb-1.5">
-                  Vision Statement
-                </label>
+                <label className="block text-slate-300 text-sm font-medium mb-1.5">Vision Statement</label>
                 <textarea
                   value={editingCandidate.vision}
                   onChange={(e) => updateField('vision', e.target.value)}
@@ -538,7 +597,6 @@ export default function AdminCandidates() {
                 />
               </div>
 
-              {/* Promises */}
               <div>
                 <label className="block text-slate-300 text-sm font-medium mb-1.5">
                   Promises ({editingCandidate.promises.filter((p) => p.trim()).length})
@@ -572,7 +630,6 @@ export default function AdminCandidates() {
                 </div>
               </div>
 
-              {/* Achievements */}
               <div>
                 <label className="block text-slate-300 text-sm font-medium mb-1.5">
                   Achievements ({editingCandidate.achievements.filter((a) => a.trim()).length})
@@ -607,7 +664,6 @@ export default function AdminCandidates() {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex items-center justify-end gap-3 p-6 border-t border-white/10">
               <button
                 onClick={() => {
@@ -620,17 +676,17 @@ export default function AdminCandidates() {
               </button>
               <button
                 onClick={handleSave}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all"
+                disabled={saving}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
-                {isCreating ? 'Add Candidate' : 'Save Changes'}
+                {saving ? 'Saving...' : isCreating ? 'Add Candidate' : 'Save Changes'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Candidates List */}
       <div className="space-y-3">
         {candidates.map((candidate) => (
           <div
@@ -641,7 +697,6 @@ export default function AdminCandidates() {
               className="flex items-center gap-4 p-5 cursor-pointer hover:bg-white/[0.02] transition-all"
               onClick={() => setExpandedId(expandedId === candidate.id ? null : candidate.id)}
             >
-              {/* Profile Picture or Avatar */}
               <div className="flex-shrink-0">
                 {candidate.profilePicture ? (
                   <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white/20 shadow-lg">
@@ -663,7 +718,6 @@ export default function AdminCandidates() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3">
                   <h3 className="text-white font-bold">{candidate.name}</h3>
-                  {/* Election Symbol badge */}
                   {candidate.symbol && (
                     <div className="w-7 h-7 rounded-lg overflow-hidden border border-white/20 flex-shrink-0">
                       <img
@@ -740,7 +794,6 @@ export default function AdminCandidates() {
 
             {expandedId === candidate.id && (
               <div className="px-5 pb-5 border-t border-white/5 pt-4 space-y-4">
-                {/* Images Preview */}
                 <div className="flex gap-6 flex-wrap">
                   <div>
                     <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-2">
@@ -781,22 +834,16 @@ export default function AdminCandidates() {
                 </div>
 
                 <div>
-                  <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">
-                    Tagline
-                  </p>
+                  <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">Tagline</p>
                   <p className="text-slate-300 text-sm italic">{candidate.tagline}</p>
                 </div>
                 <div>
-                  <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">
-                    Bio
-                  </p>
+                  <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">Bio</p>
                   <p className="text-slate-300 text-sm leading-relaxed">{candidate.bio}</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-2">
-                      Promises
-                    </p>
+                    <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-2">Promises</p>
                     <ul className="space-y-1">
                       {candidate.promises.map((p, i) => (
                         <li key={i} className="text-slate-300 text-sm flex gap-2">
@@ -806,9 +853,7 @@ export default function AdminCandidates() {
                     </ul>
                   </div>
                   <div>
-                    <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-2">
-                      Achievements
-                    </p>
+                    <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-2">Achievements</p>
                     <ul className="space-y-1">
                       {candidate.achievements.map((a, i) => (
                         <li key={i} className="text-slate-300 text-sm flex gap-2">
@@ -824,7 +869,7 @@ export default function AdminCandidates() {
         ))}
       </div>
 
-      {candidates.length === 0 && (
+      {candidates.length === 0 && !loading && (
         <div className="text-center py-16 rounded-2xl bg-white/5 border border-white/10">
           <Users className="w-16 h-16 text-slate-700 mx-auto mb-4" />
           <p className="text-slate-400 text-lg font-medium">No candidates yet</p>
