@@ -12,7 +12,7 @@ export default function AdminLogin() {
     e.preventDefault();
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -20,7 +20,7 @@ export default function AdminLogin() {
     if (error) {
       alert('Login failed: ' + error.message);
     } else {
-      navigate('/admin/dashboard');
+      navigate('/admin');
     }
 
     setLoading(false);

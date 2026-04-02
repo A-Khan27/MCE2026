@@ -1,51 +1,36 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { supabase } from '../lib/supabase'; // Adjust path if needed
 
-interface AdminContextType {
-  isAuthenticated: boolean;
-  login: (password: string) => boolean;
-  logout: () => void;
-}
-
-const AdminContext = createContext<AdminContextType>({
-  isAuthenticated: false,
-  login: () => false,
-  logout: () => {},
-});
-
-const ADMIN_PASSWORD = 'MyNewSecurePassword123@hs@n';
-const AUTH_KEY = 'mathclub-admin-auth';
+const AdminContext = createContext<any>(null);
 
 export function AdminProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem(AUTH_KEY);
-    if (stored === 'true') {
-      setIsAuthenticated(true);
-    }
+    // Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAuthenticated(!!session);
+      setLoading(false);
+    });
+
+    // Listen for login/logout
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = (password: string) => {
-    if (password === ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      localStorage.setItem(AUTH_KEY, 'true');
-      return true;
-    }
-    return false;
-  };
-
-  const logout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem(AUTH_KEY);
+  const logout = async () => {
+    await supabase.auth.signOut();
   };
 
   return (
-    <AdminContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AdminContext.Provider value={{ isAuthenticated, logout, loading }}>
       {children}
     </AdminContext.Provider>
   );
 }
 
-export function useAdmin() {
-  return useContext(AdminContext);
-}
+export const useAdmin = () => useContext(AdminContext);

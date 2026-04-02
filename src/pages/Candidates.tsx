@@ -3,18 +3,64 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, Award, Target, BookOpen, Shield } from 'lucide-react';
 import { Candidate } from '../types';
 import { candidates as defaultCandidates } from '../data/candidates';
+import { supabase } from '../lib/supabase'; // 👈 Fixed relative path
 
 export default function Candidates() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('mathclub-candidates');
-    if (stored) {
-      setCandidates(JSON.parse(stored));
-    } else {
-      setCandidates(defaultCandidates);
+    async function fetchCandidates() {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('candidates')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const formatted = data.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            position: c.position,
+            department: c.department,
+            year: c.year,
+            tagline: c.tagline,
+            bio: c.bio || '',
+            avatar: c.avatar || '🧮',
+            color: c.color || 'from-blue-500 to-indigo-600',
+            profilePicture: c.profile_picture || '',
+            symbol: c.symbol || '',
+            promises: c.promises || [],
+            vision: c.vision || '',
+            achievements: c.achievements || [],
+            socials: c.socials || { email: '' },
+          }));
+          setCandidates(formatted);
+        } else {
+          setCandidates(defaultCandidates);
+        }
+      } catch (err) {
+        console.error("Error fetching candidates:", err);
+        setCandidates(defaultCandidates); // Falls back to local data if Supabase fails
+      } finally {
+        setLoading(false);
+      }
     }
+    fetchCandidates();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-white text-xl animate-pulse" style={{ fontFamily: 'Space Grotesk' }}>
+          Loading Candidates...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 pt-24 pb-16">
