@@ -1,73 +1,62 @@
-import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
-import { AdminProvider } from './context/AdminContext';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
-import Home from './pages/Home';
-import Candidates from './pages/Candidates';
-import CandidateDetail from './pages/CandidateDetail';
-import Wishlist from './pages/Wishlist';
-import Timeline from './pages/Timeline';
-import Polls from './pages/Polls';
-import AdminLogin from './pages/admin/AdminLogin';
-import AdminLayout from './pages/admin/AdminLayout';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminWishlist from './pages/admin/AdminWishlist';
-import AdminCandidates from './pages/admin/AdminCandidates';
-import AdminTimeline from './pages/admin/AdminTimeline';
-import AdminPolls from './pages/admin/AdminPolls';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 
-function ScrollToTop() {
-  const { pathname } = useLocation();
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
-  return null;
-}
+export default function AdminLogin() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-function PublicLayout() {
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert('Login failed: ' + error.message);
+    } else {
+      navigate('/admin');  // ✅ Changed from /admin/dashboard to /admin
+    }
+
+    setLoading(false);
+  }
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
-      <Navbar />
-      <main>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/candidates" element={<Candidates />} />
-          <Route path="/candidates/:id" element={<CandidateDetail />} />
-          <Route path="/wishlist" element={<Wishlist />} />
-          <Route path="/timeline" element={<Timeline />} />
-          <Route path="/polls" element={<Polls />} />
-        </Routes>
-      </main>
-      <Footer />
+    <div className="min-h-screen flex items-center justify-center bg-slate-950">
+      <form onSubmit={handleLogin} className="p-8 bg-white/5 border border-white/10 rounded-2xl">
+        <h2 className="text-2xl font-bold text-white mb-6">Admin Login</h2>
+        
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full p-3 mb-4 bg-white/10 border border-white/10 rounded-lg text-white"
+          required
+        />
+        
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full p-3 mb-4 bg-white/10 border border-white/10 rounded-lg text-white"
+          required
+        />
+        
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full p-3 bg-indigo-500 text-white rounded-lg font-semibold hover:bg-indigo-600 disabled:opacity-50"
+        >
+          {loading ? 'Logging in...' : 'Login'}
+        </button>
+      </form>
     </div>
   );
 }
-
-function App() {
-  return (
-    <AdminProvider>
-      <Router>
-        <ScrollToTop />
-        <div style={{ fontFamily: 'Inter, sans-serif' }}>
-          <Routes>
-            {/* Admin Routes */}
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminDashboard />} />
-              <Route path="wishlist" element={<AdminWishlist />} />
-              <Route path="candidates" element={<AdminCandidates />} />
-              <Route path="timeline" element={<AdminTimeline />} />
-              <Route path="polls" element={<AdminPolls />} />
-            </Route>
-
-            {/* Public Routes */}
-            <Route path="/*" element={<PublicLayout />} />
-          </Routes>
-        </div>
-      </Router>
-    </AdminProvider>
-  );
-}
-
-export default App;
