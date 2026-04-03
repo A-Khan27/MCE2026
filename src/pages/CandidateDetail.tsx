@@ -1,23 +1,124 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Mail, CheckCircle2, Star, Quote, Target, Trophy, Lightbulb, Shield } from 'lucide-react';
-import { Candidate } from '../types';
-import { candidates as defaultCandidates } from '../data/candidates';
+import { supabase } from '../lib/supabase';
+
+type Candidate = {
+  id: string;
+  name: string;
+  position: string;
+  department: string;
+  year: string;
+  tagline: string;
+  bio: string;
+  avatar: string;
+  color: string;
+  profilePicture: string;
+  symbol: string;
+  promises: string[];
+  vision: string;
+  achievements: string[];
+  socials: {
+    email: string;
+  };
+};
 
 export default function CandidateDetail() {
   const { id } = useParams<{ id: string }>();
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [otherCandidates, setOtherCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('mathclub-candidates');
-    if (stored) {
-      setCandidates(JSON.parse(stored));
-    } else {
-      setCandidates(defaultCandidates);
+    if (id) {
+      fetchCandidate(id);
+      fetchOtherCandidates(id);
     }
-  }, []);
+  }, [id]);
 
-  const candidate = candidates.find((c) => c.id === id);
+  async function fetchCandidate(candidateId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('candidates')
+        .select('*')
+        .eq('id', candidateId)
+        .maybeSingle();
+
+      if (error || !data) {
+        console.error('Candidate fetch error:', error);
+        setCandidate(null);
+        return;
+      }
+
+      setCandidate({
+        id: String(data.id),
+        name: data.name,
+        position: data.position,
+        department: data.department,
+        year: data.year,
+        tagline: data.tagline,
+        bio: data.bio || '',
+        avatar: data.avatar || '🎓',
+        color: data.color || 'from-blue-500 to-indigo-600',
+        profilePicture: data.profile_picture || '',
+        symbol: data.symbol || '',
+        promises: data.promises || [],
+        vision: data.vision || '',
+        achievements: data.achievements || [],
+        socials: data.socials || { email: '' },
+      });
+    } catch (err) {
+      console.error('Error fetching candidate:', err);
+      setCandidate(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchOtherCandidates(currentId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('candidates')
+        .select('*')
+        .neq('id', currentId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Other candidates fetch error:', error);
+        return;
+      }
+
+      const formatted = (data || []).map((c: any) => ({
+        id: String(c.id),
+        name: c.name,
+        position: c.position,
+        department: c.department,
+        year: c.year,
+        tagline: c.tagline,
+        bio: c.bio || '',
+        avatar: c.avatar || '🎓',
+        color: c.color || 'from-blue-500 to-indigo-600',
+        profilePicture: c.profile_picture || '',
+        symbol: c.symbol || '',
+        promises: c.promises || [],
+        vision: c.vision || '',
+        achievements: c.achievements || [],
+        socials: c.socials || { email: '' },
+      }));
+
+      setOtherCandidates(formatted);
+    } catch (err) {
+      console.error('Error fetching other candidates:', err);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 pt-24 flex items-center justify-center">
+        <div className="text-center text-white text-xl">Loading candidate...</div>
+      </div>
+    );
+  }
 
   if (!candidate) {
     return (
@@ -35,7 +136,6 @@ export default function CandidateDetail() {
   return (
     <div className="min-h-screen bg-slate-950 pt-24 pb-16">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Back Button */}
         <Link
           to="/candidates"
           className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8 group"
@@ -44,14 +144,12 @@ export default function CandidateDetail() {
           Back to All Candidates
         </Link>
 
-        {/* Hero Card */}
         <div className="relative rounded-3xl overflow-hidden mb-8">
           <div className={`absolute inset-0 bg-gradient-to-br ${candidate.color} opacity-10`} />
           <div className="absolute inset-0 bg-slate-950/60" />
-          
+
           <div className="relative p-8 sm:p-12">
             <div className="flex flex-col sm:flex-row items-start gap-8">
-              {/* Profile Picture with Symbol */}
               <div className="flex-shrink-0 relative">
                 {candidate.profilePicture ? (
                   <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-3xl overflow-hidden border-3 border-white/20 shadow-2xl ring-4 ring-white/10">
@@ -66,7 +164,6 @@ export default function CandidateDetail() {
                     {candidate.avatar}
                   </div>
                 )}
-                {/* Election Symbol overlay badge */}
                 {candidate.symbol && (
                   <div className="absolute -bottom-3 -right-3 w-14 h-14 rounded-2xl overflow-hidden border-3 border-slate-950 shadow-xl bg-white/10 backdrop-blur-sm ring-2 ring-white/20">
                     <img
@@ -77,7 +174,7 @@ export default function CandidateDetail() {
                   </div>
                 )}
               </div>
-              
+
               <div className="flex-1">
                 <div className="flex items-center gap-3 flex-wrap mb-2">
                   <h1 className="text-3xl sm:text-4xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>
@@ -87,12 +184,12 @@ export default function CandidateDetail() {
                     {candidate.position}
                   </span>
                 </div>
-                
+
                 <p className="text-indigo-300 font-medium mb-1">
                   {candidate.year} • {candidate.department}
                 </p>
                 <p className="text-xl text-slate-300 italic mb-4">{candidate.tagline}</p>
-                
+
                 <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex items-center gap-2 text-slate-400 text-sm">
                     <Mail className="w-4 h-4" />
@@ -106,7 +203,6 @@ export default function CandidateDetail() {
           </div>
         </div>
 
-        {/* Election Symbol Showcase (if exists) */}
         {candidate.symbol && (
           <div className="mb-8 rounded-2xl bg-white/5 border border-white/10 p-6">
             <div className="flex items-center gap-6">
@@ -125,7 +221,7 @@ export default function CandidateDetail() {
                   </h3>
                 </div>
                 <p className="text-slate-400 text-sm">
-                  This is the official election symbol for <strong className="text-slate-300">{candidate.name}</strong>. 
+                  This is the official election symbol for <strong className="text-slate-300">{candidate.name}</strong>.
                   Look for this symbol on the ballot paper on Election Day.
                 </p>
               </div>
@@ -134,9 +230,7 @@ export default function CandidateDetail() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
-            {/* About */}
             <section className="rounded-2xl bg-white/5 border border-white/10 p-8">
               <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2" style={{ fontFamily: 'Space Grotesk' }}>
                 <Lightbulb className="w-5 h-5 text-yellow-400" />
@@ -145,7 +239,6 @@ export default function CandidateDetail() {
               <p className="text-slate-300 leading-relaxed">{candidate.bio}</p>
             </section>
 
-            {/* Vision Statement */}
             <section className="rounded-2xl bg-white/5 border border-white/10 p-8 relative overflow-hidden">
               <div className={`absolute top-0 left-0 w-1 h-full bg-gradient-to-b ${candidate.color}`} />
               <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2" style={{ fontFamily: 'Space Grotesk' }}>
@@ -157,7 +250,6 @@ export default function CandidateDetail() {
               </blockquote>
             </section>
 
-            {/* Promises */}
             <section className="rounded-2xl bg-white/5 border border-white/10 p-8">
               <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2" style={{ fontFamily: 'Space Grotesk' }}>
                 <Target className="w-5 h-5 text-emerald-400" />
@@ -177,9 +269,7 @@ export default function CandidateDetail() {
             </section>
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-8">
-            {/* Candidate Card with Photo */}
             {candidate.profilePicture && (
               <section className="rounded-2xl overflow-hidden border border-white/10">
                 <div className="aspect-square">
@@ -196,7 +286,6 @@ export default function CandidateDetail() {
               </section>
             )}
 
-            {/* Achievements */}
             <section className="rounded-2xl bg-white/5 border border-white/10 p-6">
               <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2" style={{ fontFamily: 'Space Grotesk' }}>
                 <Trophy className="w-5 h-5 text-yellow-400" />
@@ -212,7 +301,6 @@ export default function CandidateDetail() {
               </div>
             </section>
 
-            {/* Quick Stats */}
             <section className="rounded-2xl bg-white/5 border border-white/10 p-6">
               <h2 className="text-lg font-bold text-white mb-4" style={{ fontFamily: 'Space Grotesk' }}>
                 At a Glance
@@ -251,7 +339,6 @@ export default function CandidateDetail() {
               </div>
             </section>
 
-            {/* Contact CTA */}
             <div className={`rounded-2xl bg-gradient-to-br ${candidate.color} p-6 text-center`}>
               <h3 className="text-white font-bold text-lg mb-2">Have Questions?</h3>
               <p className="text-white/80 text-sm mb-4">
@@ -268,42 +355,39 @@ export default function CandidateDetail() {
           </div>
         </div>
 
-        {/* Other Candidates */}
         <section className="mt-16">
           <h2 className="text-2xl font-bold text-white mb-6" style={{ fontFamily: 'Space Grotesk' }}>
             Other Candidates
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {candidates
-              .filter((c) => c.id !== candidate.id)
-              .map((c) => (
-                <Link
-                  key={c.id}
-                  to={`/candidates/${c.id}`}
-                  className="group flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 transition-all"
-                >
-                  <div className="relative flex-shrink-0">
-                    {c.profilePicture ? (
-                      <div className="w-14 h-14 rounded-xl overflow-hidden border-2 border-white/20 group-hover:scale-110 transition-transform">
-                        <img src={c.profilePicture} alt={c.name} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
-                        {c.avatar}
-                      </div>
-                    )}
-                    {c.symbol && (
-                      <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-md overflow-hidden border border-slate-950 bg-white/10">
-                        <img src={c.symbol} alt="Symbol" className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-white font-semibold">{c.name}</h3>
-                    <p className="text-slate-400 text-sm">{c.year}</p>
-                  </div>
-                </Link>
-              ))}
+            {otherCandidates.map((c) => (
+              <Link
+                key={c.id}
+                to={`/candidates/${c.id}`}
+                className="group flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 transition-all"
+              >
+                <div className="relative flex-shrink-0">
+                  {c.profilePicture ? (
+                    <div className="w-14 h-14 rounded-xl overflow-hidden border-2 border-white/20 group-hover:scale-110 transition-transform">
+                      <img src={c.profilePicture} alt={c.name} className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
+                      {c.avatar}
+                    </div>
+                  )}
+                  {c.symbol && (
+                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-md overflow-hidden border border-slate-950 bg-white/10">
+                      <img src={c.symbol} alt="Symbol" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">{c.name}</h3>
+                  <p className="text-slate-400 text-sm">{c.year}</p>
+                </div>
+              </Link>
+            ))}
           </div>
         </section>
       </div>
