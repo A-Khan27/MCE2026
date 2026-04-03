@@ -1,194 +1,232 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { ChevronRight, Award, Target, BookOpen, Shield } from 'lucide-react';
-import { Candidate } from '../types';
-import { candidates as defaultCandidates } from '../data/candidates';
-import { supabase } from '../lib/supabase'; // 👈 Fixed relative path
+import { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { ArrowLeft, Mail, Trophy, Target, Star } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
-export default function Candidates() {
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+type Candidate = {
+  id: string;
+  name: string;
+  position: string;
+  department: string;
+  year: string;
+  tagline: string;
+  bio: string;
+  avatar: string;
+  color: string;
+  profilePicture?: string;
+  symbol?: string;
+  promises: string[];
+  vision: string;
+  achievements: string[];
+  socials?: {
+    email?: string;
+  };
+};
+
+export default function CandidateDetail() {
+  const { id } = useParams();
+  const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchCandidates() {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('candidates')
-          .select('*')
-          .order('created_at', { ascending: true });
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          const formatted = data.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            position: c.position,
-            department: c.department,
-            year: c.year,
-            tagline: c.tagline,
-            bio: c.bio || '',
-            avatar: c.avatar || '🧮',
-            color: c.color || 'from-blue-500 to-indigo-600',
-            profilePicture: c.profile_picture || '',
-            symbol: c.symbol || '',
-            promises: c.promises || [],
-            vision: c.vision || '',
-            achievements: c.achievements || [],
-            socials: c.socials || { email: '' },
-          }));
-          setCandidates(formatted);
-        } else {
-          setCandidates(defaultCandidates);
-        }
-      } catch (err) {
-        console.error("Error fetching candidates:", err);
-        setCandidates(defaultCandidates); // Falls back to local data if Supabase fails
-      } finally {
-        setLoading(false);
-      }
+    if (id) {
+      fetchCandidate(id);
     }
-    fetchCandidates();
-  }, []);
+  }, [id]);
+
+  async function fetchCandidate(candidateId: string) {
+    try {
+      console.log('Looking for candidate id:', candidateId);
+
+      const { data, error } = await supabase
+        .from('candidates')
+        .select('*')
+        .eq('id', candidateId)
+        .maybeSingle();
+
+      console.log('Candidate query result:', data, error);
+
+      if (error || !data) {
+        setCandidate(null);
+        return;
+      }
+
+      setCandidate({
+        id: String(data.id),
+        name: data.name,
+        position: data.position,
+        department: data.department,
+        year: data.year,
+        tagline: data.tagline,
+        bio: data.bio || '',
+        avatar: data.avatar || '🎓',
+        color: data.color || 'from-blue-500 to-indigo-600',
+        profilePicture: data.profile_picture || '',
+        symbol: data.symbol || '',
+        promises: data.promises || [],
+        vision: data.vision || '',
+        achievements: data.achievements || [],
+        socials: data.socials || {},
+      });
+    } catch (err) {
+      console.error('Error fetching candidate:', err);
+      setCandidate(null);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-white text-xl animate-pulse" style={{ fontFamily: 'Space Grotesk' }}>
-          Loading Candidates...
-        </div>
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <p className="text-slate-400 text-lg">Loading candidate profile...</p>
+      </div>
+    );
+  }
+
+  if (!candidate) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-4">
+        <h1 className="text-3xl font-bold mb-4">Candidate Not Found</h1>
+        <p className="text-slate-400 mb-6">The candidate profile you are looking for does not exist.</p>
+        <Link
+          to="/candidates"
+          className="px-6 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 transition text-white"
+        >
+          Back to Candidates
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 pt-24 pb-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm font-medium mb-4">
-            <Award className="w-4 h-4" />
-            GS Race
-          </div>
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4" style={{ fontFamily: 'Space Grotesk' }}>
-            Our Candidates
-          </h1>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            Four passionate mathematicians. One vision for the future. 
-            Click on any candidate to explore their full platform.
-          </p>
-        </div>
+    <div className="min-h-screen bg-slate-950 text-white pt-24 pb-16">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Link
+          to="/candidates"
+          className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Candidates
+        </Link>
 
-        {/* Candidate Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {candidates.map((candidate, index) => (
-            <Link
-              key={candidate.id}
-              to={`/candidates/${candidate.id}`}
-              className="group relative rounded-3xl bg-white/5 border border-white/10 hover:border-white/20 overflow-hidden transition-all duration-500 hover:shadow-2xl hover:scale-[1.02]"
-            >
-              <div className={`absolute inset-0 bg-gradient-to-br ${candidate.color} opacity-0 group-hover:opacity-5 transition-opacity duration-500`} />
-              
-              <div className="relative p-8">
-                <div className="flex items-start gap-6">
-                  {/* Profile Picture / Avatar */}
-                  <div className="flex-shrink-0 relative">
-                    {candidate.profilePicture ? (
-                      <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-white/20 shadow-xl group-hover:scale-110 transition-transform duration-500">
-                        <img
-                          src={candidate.profilePicture}
-                          alt={candidate.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className={`w-24 h-24 rounded-2xl bg-gradient-to-br ${candidate.color} flex items-center justify-center text-4xl shadow-xl group-hover:scale-110 transition-transform duration-500`}>
-                        {candidate.avatar}
-                      </div>
-                    )}
-                    {/* Election Symbol Badge */}
-                    {candidate.symbol && (
-                      <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-xl overflow-hidden border-2 border-slate-950 shadow-lg bg-white/10 backdrop-blur-sm">
-                        <img
-                          src={candidate.symbol}
-                          alt="Election Symbol"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
+        <div className="rounded-3xl bg-white/5 border border-white/10 overflow-hidden">
+          <div className={`h-48 bg-gradient-to-r ${candidate.color}`} />
+
+          <div className="px-6 sm:px-10 pb-10 relative">
+            <div className="-mt-16 mb-6 flex flex-col sm:flex-row sm:items-end gap-6">
+              <div className="relative">
+                {candidate.profilePicture ? (
+                  <div className="w-32 h-32 rounded-3xl overflow-hidden border-4 border-slate-950 shadow-2xl">
+                    <img
+                      src={candidate.profilePicture}
+                      alt={candidate.name}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
+                ) : (
+                  <div className={`w-32 h-32 rounded-3xl bg-gradient-to-br ${candidate.color} flex items-center justify-center text-5xl border-4 border-slate-950 shadow-2xl`}>
+                    {candidate.avatar}
+                  </div>
+                )}
+                {candidate.symbol && (
+                  <div className="absolute -bottom-2 -right-2 w-12 h-12 rounded-xl overflow-hidden border-2 border-slate-950 bg-white/10">
+                    <img src={candidate.symbol} alt="Symbol" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                      <h2 className="text-2xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>
-                        {candidate.name}
-                      </h2>
-                      <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-medium">
-                        #{index + 1}
-                      </span>
-                    </div>
-                    <p className="text-indigo-400 font-medium mb-1">
-                      {candidate.position} Candidate
-                    </p>
-                    <p className="text-slate-400 text-sm mb-3">
-                      {candidate.year} • {candidate.department}
-                    </p>
-                    <p className="text-slate-300 text-sm italic mb-4">{candidate.tagline}</p>
-                    
-                    <p className="text-slate-400 text-sm leading-relaxed line-clamp-2 mb-4">
-                      {candidate.bio}
-                    </p>
+              <div className="flex-1">
+                <h1 className="text-3xl sm:text-4xl font-bold">{candidate.name}</h1>
+                <p className="text-indigo-400 font-medium mt-1">
+                  {candidate.position} • {candidate.year} • {candidate.department}
+                </p>
+                <p className="text-slate-300 italic mt-3">{candidate.tagline}</p>
+              </div>
+            </div>
 
-                    {/* Quick Stats */}
-                    <div className="flex flex-wrap gap-4 mb-4">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Target className="w-4 h-4 text-emerald-400" />
-                        <span className="text-slate-300">{candidate.promises.length} Promises</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <BookOpen className="w-4 h-4 text-purple-400" />
-                        <span className="text-slate-300">{candidate.achievements.length} Achievements</span>
-                      </div>
-                      {candidate.symbol && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Shield className="w-4 h-4 text-amber-400" />
-                          <span className="text-slate-300">Symbol Assigned</span>
-                        </div>
-                      )}
-                    </div>
+            <div className="grid gap-8 lg:grid-cols-3">
+              <div className="lg:col-span-2 space-y-8">
+                <section>
+                  <h2 className="text-xl font-bold mb-3">Biography</h2>
+                  <p className="text-slate-300 leading-relaxed">{candidate.bio || 'No biography available.'}</p>
+                </section>
 
-                    {/* Top Promises Preview */}
-                    <div className="flex flex-wrap gap-2">
-                      {candidate.promises.slice(0, 3).map((promise, i) => (
-                        <span
-                          key={i}
-                          className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300 text-xs"
-                        >
-                          {promise.length > 30 ? promise.substring(0, 30) + '...' : promise}
-                        </span>
-                      ))}
-                    </div>
+                <section>
+                  <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
+                    <Target className="w-5 h-5 text-indigo-400" />
+                    Vision
+                  </h2>
+                  <p className="text-slate-300 leading-relaxed">{candidate.vision || 'No vision statement available.'}</p>
+                </section>
+
+                <section>
+                  <h2 className="text-xl font-bold mb-3">Promises</h2>
+                  <ul className="space-y-2">
+                    {candidate.promises?.length > 0 ? (
+                      candidate.promises.map((promise, index) => (
+                        <li key={index} className="text-slate-300 flex gap-2">
+                          <span className="text-indigo-400">•</span>
+                          {promise}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-slate-500">No promises listed.</li>
+                    )}
+                  </ul>
+                </section>
+
+                <section>
+                  <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-amber-400" />
+                    Achievements
+                  </h2>
+                  <ul className="space-y-2">
+                    {candidate.achievements?.length > 0 ? (
+                      candidate.achievements.map((achievement, index) => (
+                        <li key={index} className="text-slate-300 flex gap-2">
+                          <span className="text-emerald-400">✓</span>
+                          {achievement}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-slate-500">No achievements listed.</li>
+                    )}
+                  </ul>
+                </section>
+              </div>
+
+              <div className="space-y-6">
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-yellow-400" />
+                    Candidate Info
+                  </h3>
+                  <div className="space-y-3 text-sm">
+                    <p><span className="text-slate-500">Position:</span> <span className="text-white">{candidate.position}</span></p>
+                    <p><span className="text-slate-500">Department:</span> <span className="text-white">{candidate.department}</span></p>
+                    <p><span className="text-slate-500">Year:</span> <span className="text-white">{candidate.year}</span></p>
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-end text-indigo-400 text-sm font-medium group-hover:text-indigo-300 transition-colors">
-                  View Full Profile
-                  <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-2 transition-transform" />
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                  <h3 className="text-lg font-bold mb-4">Contact</h3>
+                  <div className="space-y-3">
+                    {candidate.socials?.email ? (
+                      <a
+                        href={`mailto:${candidate.socials.email}`}
+                        className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
+                      >
+                        <Mail className="w-4 h-4 text-indigo-400" />
+                        {candidate.socials.email}
+                      </a>
+                    ) : (
+                      <p className="text-slate-500 text-sm">No contact info available.</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </Link>
-          ))}
-        </div>
-
-        {/* Comparison Note */}
-        <div className="mt-16 text-center">
-          <div className="inline-block p-6 rounded-2xl bg-white/5 border border-white/10">
-            <p className="text-slate-300 text-sm">
-              💡 <strong className="text-white">Tip:</strong> Click on any candidate to see their detailed platform, 
-              vision statement, and complete list of promises.
-            </p>
+            </div>
           </div>
         </div>
       </div>
